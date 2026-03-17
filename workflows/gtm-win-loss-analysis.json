@@ -1,0 +1,303 @@
+{
+  "name": "RevOps AI: Win/Loss Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🏆 Win/Loss Analysis\\n\\n**Purpose:** Analyze closed deals to surface patterns in wins and losses by segment, competitor, and deal size.\\n\\n**Trigger:** Monthly/Quarterly via cron or on-demand via webhook.\\n\\n**Setup:**\\n1. Connect HubSpot credentials\\n2. Connect Anthropic API key\\n3. Set Slack channel or email recipients\\n4. Adjust date range in the filter node",
+        "height": 280,
+        "width": 380,
+        "color": 4
+      },
+      "id": "a9f6f597-b335-4365-9f5c-7e90ba2d6e3c",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ⚙️ Configuration\\n\\n**HubSpot Filter:** Deals closed in last 90 days\\n\\n**Minimum deals:** 10+ for meaningful patterns\\n\\n**AI Model:** Claude Sonnet\\n\\n**Output:** Slack + Email (disable either if not needed)",
+        "height": 220,
+        "width": 380,
+        "color": 6
+      },
+      "id": "6a437dfc-555e-4795-b4b7-98471cffb153",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "f53373de-b170-4cd9-a046-28819e418eaf",
+      "name": "Monthly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "path": "win-loss-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "822b83ae-0783-4c36-95c0-56884a835c18",
+      "name": "On-Demand Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        560,
+        432
+      ],
+      "webhookId": "53c96048-693c-4a0e-9819-d84c8e4836b2"
+    },
+    {
+      "parameters": {
+        "resource": "deal",
+        "operation": "getAll",
+        "limit": 200,
+        "filters": {}
+      },
+      "id": "f7bf0595-e4a9-43a6-8d64-342ac5f779d4",
+      "name": "Fetch Closed Deals",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        816,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const deals = $input.all();\\nconst dealSummaries = deals.map((item, i) => {\\n  const d = item.json.properties || item.json;\\n  return `Deal ${i+1}: ${d.dealname || 'Unnamed'}\\n  - Outcome: ${(d.dealstage || '').includes('won') ? 'WON' : 'LOST'}\\n  - Amount: $${Number(d.amount || 0).toLocaleString()}\\n  - Close Date: ${d.closedate || 'N/A'}\\n  - Source: ${d.hs_analytics_source || 'N/A'}`\\n}).join('\\\\n\\\\n');\\nconst summary = `Total: ${deals.length} | Won: ${deals.filter(d => (d.json.properties?.dealstage || d.json.dealstage || '').includes('won')).length} | Lost: ${deals.filter(d => (d.json.properties?.dealstage || d.json.dealstage || '').includes('lost')).length}`;\\nreturn [{ json: { dealData: dealSummaries, summary, dealCount: deals.length } }];"
+      },
+      "id": "064bdc2d-5164-4f69-9c7c-6186f056132c",
+      "name": "Prepare Deal Data for AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a RevOps analyst. Analyze {{ $json.dealCount }} closed deals:\\n\\n{{ $json.dealData }}\\n\\nSummary: {{ $json.summary }}\\n\\nOutput:\\n1. Executive Summary\\n2. Top 3 Win Patterns\\n3. Top 3 Loss Reasons\\n4. Segment Differences\\n5. Recommended Actions",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "systemMessage",
+              "message": "You are an expert RevOps analyst specializing in win/loss pattern analysis."
+            }
+          ]
+        }
+      },
+      "id": "ea517858-53d3-4429-b549-2669959db52e",
+      "name": "Analyze Win/Loss Patterns",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1344,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {
+          "maxTokensToSample": 4096,
+          "temperature": 0.3
+        }
+      },
+      "id": "dad4c4d8-ce2e-4559-b56f-80133c998d81",
+      "name": "Anthropic Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.first().json.text || 'No analysis';\\nconst now = new Date().toISOString().split('T')[0];\\nreturn [{ json: { text: analysis, slackMessage: `🏆 *Win/Loss Analysis — ${now}*\\\\n\\\\n${analysis}`, emailSubject: `Win/Loss Report — ${now}`, timestamp: now }}];"
+      },
+      "id": "795dde0d-e1fc-430b-9cb2-4f5349a9e83a",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {}
+      },
+      "id": "eb5615ed-4ff3-415c-8f36-512ea760cbd3",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        224
+      ],
+      "webhookId": "be813031-d341-4389-b5f4-f3c14a520f0b"
+    },
+    {
+      "parameters": {
+        "sendTo": "revops@company.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "2a877016-098b-47b1-8748-20ea15d52ce9",
+      "name": "Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1856,
+        432
+      ],
+      "webhookId": "56d44fce-22b7-47dc-b5b4-3a6161c390fe"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ analysis: $json.text }) }}",
+        "options": {}
+      },
+      "id": "b5012c43-60be-4765-b247-44c0e2dc82a8",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1856,
+        608
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Monthly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Closed Deals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On-Demand Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Closed Deals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Closed Deals": {
+      "main": [
+        [
+          {
+            "node": "Prepare Deal Data for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Deal Data for AI": {
+      "main": [
+        [
+          {
+            "node": "Analyze Win/Loss Patterns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Win/Loss Patterns": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Output": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Claude": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analyze Win/Loss Patterns",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0c60c211-d0c0-46f3-ab23-e6a655b1a2c9",
+  "meta": {
+    "instanceId": "db1715da5f21adba44ce4ea3b08abb06cd1771e876f5ad2751fcafd78c5eb9dc"
+  },
+  "id": "RxvqGGR2kT80xLkP",
+  "tags": []
+}
