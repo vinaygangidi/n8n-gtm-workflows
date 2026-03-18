@@ -1,0 +1,362 @@
+{
+  "name": "LoanFraudDetectionAgent",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fbf11200-be89-4e85-ba4d-3d9b66a547fd",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "search",
+        "query": "LOS"
+      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "8065cb81-fb2b-4972-9fc8-695390bcf4b2",
+      "name": "Search a folder",
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "YOUR_MICROSOFTONEDRIVEOAUTH2API_CREDENTIAL_ID",
+          "name": "Microsoft Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "folderId": "={{ $json.id }}"
+      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "c6e4e46c-34c1-47a5-be9a-3a508b1a2458",
+      "name": "Get items in a folder",
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "YOUR_MICROSOFTONEDRIVEOAUTH2API_CREDENTIAL_ID",
+          "name": "Microsoft Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $('Get items in a folder').item.json.id }}"
+      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        160
+      ],
+      "id": "928037c4-908b-4ec1-81a7-482b3efeaff9",
+      "name": "Download a file",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "YOUR_MICROSOFTONEDRIVEOAUTH2API_CREDENTIAL_ID",
+          "name": "Microsoft Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        160
+      ],
+      "id": "e0f3cb3d-dcbe-47b2-9f8e-70b72a9f88ad",
+      "name": "Extract text",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "YOUR_MISTRALCLOUDAPI_CREDENTIAL_ID",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// get filename from Download node\nconst fileName = ($('Download a file').first().json.name || '').toLowerCase();\n\n// get extracted text from OCR node\nconst text = ($input.first().json.extractedText || '').toLowerCase();\n\nlet type = \"Unknown\";\n\n// --- Rule-based classification ---\n\n// Priority 1: File name clues\nif (fileName.includes(\"passport\")) type = \"Passport\";\nelse if (fileName.includes(\"license\") || fileName.includes(\"dl\")) type = \"Driving License\";\nelse if (fileName.includes(\"mortgage\")) type = \"Mortgage Application\";\nelse if (fileName.includes(\"proof\") && fileName.includes(\"fund\")) type = \"Proof of Funds Letter\";\nelse if (fileName.includes(\"pay\") || fileName.includes(\"paystub\")) type = \"Employee Pay Statement\";\nelse if (fileName.includes(\"t4\")) type = \"T4 Statement\";\nelse if (fileName.includes(\"electric\") || fileName.includes(\"hydro\")) type = \"Electricity Bill\";\nelse if (fileName.includes(\"internet\") || fileName.includes(\"shaw\")) type = \"Internet Bill\";\nelse if (fileName.includes(\"statement\") && fileName.includes(\"account\")) type = \"Account Statement\";\nelse if (fileName.includes(\"bank\")) type = \"Bank Statement\";\n\n// Priority 2: Text-based fallback\nelse if (text.includes(\"gross pay\") || text.includes(\"net pay\")) type = \"Employee Pay Statement\";\nelse if (text.includes(\"bank of montreal\") || text.includes(\"scotiabank\") || text.includes(\"royal bank\")) type = \"Bank Statement\";\nelse if (text.includes(\"proof of funds\")) type = \"Proof of Funds Letter\";\nelse if (text.includes(\"mortgage application\")) type = \"Mortgage Application\";\nelse if (text.includes(\"driver\") && text.includes(\"licence\")) type = \"Driving License\";\nelse if (text.includes(\"internet\") && text.includes(\"usage\")) type = \"Internet Bill\";\nelse if (text.includes(\"hydro\") || text.includes(\"electricity\")) type = \"Electricity Bill\";\nelse if (text.includes(\"t4\") && text.includes(\"income\")) type = \"T4 Statement\";\n\nreturn [{\n  json: {\n    FileName: $('Download a file').first().json.name,\n    DocumentType: type,\n    ExtractedText: $input.first().json.extractedText\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        160
+      ],
+      "id": "a0071b4c-46e9-4b52-a587-9a8b63d06fe3",
+      "name": "Classify the File",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gather all items coming from the \"Done\" output of the Loop Over Items node\nconst docs = $input.all().map(item => ({\n  FileName: item.json.FileName || null,\n  DocumentType: item.json.DocumentType || \"Unknown\",\n  ExtractedText: item.json.ExtractedText || \"\"\n}));\n\nreturn [{\n  json: {\n    BorrowerName: \"Kenneth Smith\", // replace with dynamic value if available\n    Documents: docs\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        -144
+      ],
+      "id": "512b18d8-1dcd-481f-852d-a9af8783fbbf",
+      "name": "Combine the Data"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        832,
+        0
+      ],
+      "id": "fb263f2d-5216-4307-8d9c-f9db71e275d2",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.Documents, null, 2) }}",
+        "options": {
+          "systemMessage": "=You are the Loan Application Fraud Detection Agent. Your job: analyze loan applicant documents and metadata to detect fraud (document tampering, identity misrepresentation, employment/income fabrication, altered bank statements). Be auditable, deterministic, and concise. Don’t contact applicants. A human reviewer makes the final call. Use America/New_York for display times unless specified.\n\nProcess (in order):\n\nAuth checks: PDF/EXIF anomalies, creation/mod after issue date, invalid/forged signature.\n\nCross-doc: name/DOB/address/employer/income/pay periods/account numbers; chronology and deposits vs pay dates.\n\nExternal: employer in registry, business number/website/domain age, phone reachability/type.\n\nPatterns & points:\n\nID_MISMATCH 25\n\nID_TAMPER 25\n\nEMP_FABRIC 20\n\nINCOME_INFLATE 15\n\nBANK_DOCTOR 25\n\nDOC_INCONSIST 15\n\nMETA_SUSPECT 10\nMitigators (max −15): trusted digital signature −10; employer verified via official domain −10; deposits match schedule −5.\n\nScore & map: 0–30 LOW→CLEAR→PROCEED • 31–69 MEDIUM→REVIEW→ENHANCED VERIFICATION • 70–100 HIGH→FRAUD_DETECTED→REJECT. If ID_TAMPER or BANK_DOCTOR strong → FRAUD_DETECTED even if <70.\n\nDeterminism Contract (tie-break rules)\n\nRepeated “Floor/level” or code-like strings alone → treat as OCR/rendering → META_SUSPECT +10, not ID_TAMPER.\n\nID_TAMPER requires ≥2 independent signals (e.g., creation after issue and DPI/seams) or one signal with evidence.critical=true.\n\nPassport “code-like surname” → ID_MISMATCH +25 only if MRZ/biographic mismatch is evidenced; else META_SUSPECT +10.\n\nSIN/SSN mismatch across tax docs with both numbers present → ID_MISMATCH +25.\n\nCritical override (force FRAUD_DETECTED regardless of score) only if (ID_TAMPER or BANK_DOCTOR) and some evidence has critical=true.\n\nScore = sum(pattern points) − mitigators (cap 100, floor 0; mitigators cap −15).\n\nBand map: 0–30 LOW→CLEAR, 31–69 MEDIUM→REVIEW, 70–100 HIGH→FRAUD_DETECTED.\n\nSort patterns by (score desc, code asc). Round integers. Never invent rules beyond this block."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1200,
+        -144
+      ],
+      "id": "ea5cd4b2-893e-47a4-b07b-6ce54c504066",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "frequencyPenalty": 0,
+          "responseFormat": "text",
+          "presencePenalty": 0,
+          "temperature": 0,
+          "topP": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "32278ca0-8069-4c37-9685-cef633f1973a",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAIAPI_CREDENTIAL_ID",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "=Application Fraud Analysis :  {{ $('Combine the Data').item.json.BorrowerName }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        -144
+      ],
+      "id": "4f3260a9-785c-4dc8-a77c-bd35e94deef1",
+      "name": "Send a message",
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAILOAUTH2_CREDENTIAL_ID",
+          "name": "Vgangidi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input example (items[0].json.output is your report string)\nconst item = items[0].json;\n\nfunction escapeHtml(s) {\n  return s\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\nconst html = `\n<!doctype html>\n<html><head><meta charset=\"utf-8\">\n<style>\n  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }\n  pre  { white-space: pre-wrap; word-wrap: break-word; line-height:1.4;\n         font-family: ui-monospace, Menlo, Consolas, \"Courier New\", monospace; }\n</style></head>\n<body>\n  <pre>${escapeHtml(item.output || '')}</pre>\n</body></html>`;\n\nreturn [{\n  json: {\n    subject: `Fraud Analysis Report — ${item.applicantName || 'Applicant'}`,\n    html,\n    to: 'risk-review@example.com',\n    from: 'your-email@example.com'\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        -144
+      ],
+      "id": "d4eb77cb-d9e1-491e-89e5-a78e10849ea9",
+      "name": "Convert JSON to HTML"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Search a folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search a folder": {
+      "main": [
+        [
+          {
+            "node": "Get items in a folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download a file": {
+      "main": [
+        [
+          {
+            "node": "Extract text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text": {
+      "main": [
+        [
+          {
+            "node": "Classify the File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify the File": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Combine the Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get items in a folder": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine the Data": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Convert JSON to HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert JSON to HTML": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "544b408c-3bed-4c6c-9dd2-69468b593ec7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "sDSSSnml6Twh6RRu",
+  "tags": []
+}
