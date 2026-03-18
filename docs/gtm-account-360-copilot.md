@@ -127,3 +127,8 @@ GTM Automation & RevOps Engineering
 ## Last Updated
 
 March 2026
+
+## Version History
+
+- v1.0.0 — Initial GTM workflow baseline
+- v1.1.0 — Added feature branch for Account 360 enhancement workflow
