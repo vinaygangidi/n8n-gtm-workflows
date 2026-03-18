@@ -1,0 +1,364 @@
+{
+  "name": "RevOps AI: ICP & Segmentation Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎯 ICP & Segmentation Analysis\n\n**Purpose:** Build your ICP from evidence — actual closed-won data ranked by ACV, sales cycle, and retention.\n\n**Trigger:** Quarterly as part of GTM planning, or when win rates drop.\n\n**Setup:**\n1. Connect HubSpot credentials\n2. Connect Anthropic API key\n3. Adjust date range (default: 6 months)\n4. Add company properties relevant to your ICP",
+        "height": 388,
+        "width": 396,
+        "color": 4
+      },
+      "id": "53d84032-641e-4781-815d-ab2662a6b2b3",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 1 */3 *"
+            }
+          ]
+        }
+      },
+      "id": "015e2042-b30f-4c93-81eb-7ead02ba722f",
+      "name": "Quarterly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "path": "icp-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "80b94aa2-864f-4db2-895e-6ee1154b699e",
+      "name": "On-Demand Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        288,
+        224
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "deal",
+        "operation": "getAll",
+        "limit": 250,
+        "filters": {}
+      },
+      "id": "41fe06f6-3204-4779-85ad-402d0355590b",
+      "name": "Fetch Won Deals",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        544,
+        112
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "YOUR_HUBSPOTOAUTH2API_CREDENTIAL_ID",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst deals = $input.all();\n\nconst enriched = deals.map((item, i) => {\n  const d = item.json.properties || item.json;\n  const created = new Date(d.createdate);\n  const closed = new Date(d.closedate);\n  const cycleDays = Math.round((closed - created) / (1000 * 60 * 60 * 24));\n\n  return `Deal ${i+1}: ${d.dealname || 'Unnamed'}\n  - ACV: $${Number(d.amount || 0).toLocaleString()}\n  - Sales Cycle: ${cycleDays} days\n  - Source: ${d.hs_analytics_source || 'N/A'}\n  - Pipeline: ${d.pipeline || 'N/A'}\n  - Close Date: ${d.closedate || 'N/A'}`;\n}).join('\\n\\n');\n\nconst amounts = deals.map(d => Number((d.json.properties || d.json).amount || 0));\nconst avgACV = amounts.reduce((a,b) => a+b, 0) / amounts.length;\n\nreturn [{ json: {\n  dealData: enriched,\n  dealCount: deals.length,\n  avgACV: Math.round(avgACV),\n  stats: `Total won deals: ${deals.length} | Avg ACV: $${Math.round(avgACV).toLocaleString()}`\n}}];\n"
+      },
+      "id": "14354f0c-e59e-46cb-b504-bd7be73ad2b6",
+      "name": "Enrich & Format Deal Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are a RevOps analyst. Here is data from our last {{ $json.dealCount }} closed-won deals:\n\n{{ $json.dealData }}\n\nStats: {{ $json.stats }}\n\nIdentify the top firmographic and behavioural characteristics of our best customers, defined by highest ACV and shortest sales cycle.\n\nFor each characteristic, note how frequently it appears and its correlation with revenue impact. Flag any segments that appear often but have long cycles or low ACV.\n\nOutput as:\n1. **Executive Summary** — Who is our ideal customer in 2-3 sentences\n2. **Prioritised ICP Profile** — Ranked characteristics with frequency %, avg ACV, and avg cycle length\n3. **Recommended Scoring Weights** — Attribute weights for lead scoring (must total 100)\n4. **Anti-ICP Signals** — Segments to deprioritize\n5. **Actions** — 3 specific recommendations for SDRs, AEs, and marketing\n\nUse markdown formatting.",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "systemMessage",
+              "message": "You are a RevOps analyst specializing in ICP definition and market segmentation. Be quantitative and specific."
+            }
+          ]
+        }
+      },
+      "id": "fe1a64f8-3a88-46bb-919a-be3ec02927c7",
+      "name": "Analyze ICP Patterns",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1072,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "maxTokensToSample": 4096,
+          "temperature": 0.3
+        }
+      },
+      "id": "bbdc7197-cccd-4af0-871d-9859b47b890c",
+      "name": "Anthropic Claude",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [
+        1072,
+        304
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPICAPI_CREDENTIAL_ID",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst analysis = $input.first().json.text || $input.first().json.response || '';\nconst now = new Date().toISOString().split('T')[0];\nreturn [{ json: {\n  text: analysis,\n  slackMessage: `🎯 *ICP & Segmentation Analysis — ${now}*\\n\\n${analysis}`,\n  emailHtml: `<h2>ICP & Segmentation Analysis — ${now}</h2><div style=\"font-family: sans-serif; line-height: 1.6;\">${analysis.replace(/\\n/g, '<br>').replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')}</div>`,\n  emailSubject: `ICP Analysis Report — ${now}`,\n  timestamp: now\n}}];\n"
+      },
+      "id": "de1269d3-30d4-49f9-a054-4de17c6d0c82",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "value": "YOUR_SLACK_USER_ID",
+          "mode": "list",
+          "cachedResultName": "your.username"
+        },
+        "text": "={{ $json.slackMessage }}",
+        "otherOptions": {}
+      },
+      "id": "596e4f30-bb4f-4a11-a465-85e78a18ea91",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1584,
+        32
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "YOUR_SLACKOAUTH2API_CREDENTIAL_ID",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=  your-email@example.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "5ad9342a-731f-487a-b6e4-13887e72a518",
+      "name": "Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1584,
+        224
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAILOAUTH2_CREDENTIAL_ID",
+          "name": "Your Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ analysis: $json.text || $json.response }) }}",
+        "options": {}
+      },
+      "id": "6b7b4813-f4ca-41c6-ad97-052765d7451d",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1584,
+        384
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Quarterly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Won Deals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On-Demand Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Won Deals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Won Deals": {
+      "main": [
+        [
+          {
+            "node": "Enrich & Format Deal Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich & Format Deal Data": {
+      "main": [
+        [
+          {
+            "node": "Analyze ICP Patterns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze ICP Patterns": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Output": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Claude": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analyze ICP Patterns",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Slack": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "cbb6bdfe-f3a1-46d1-93f0-aca398505a32",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "oo1nyhBx9LgznlWB",
+  "tags": [
+    {
+      "updatedAt": "2026-03-17T00:13:08.129Z",
+      "createdAt": "2026-03-17T00:13:08.129Z",
+      "id": "8T44NZqLoR1224rp",
+      "name": "Segmentation"
+    },
+    {
+      "updatedAt": "2026-03-17T00:13:08.377Z",
+      "createdAt": "2026-03-17T00:13:08.377Z",
+      "id": "9p2y8bEWIW0QgGFx",
+      "name": "AI"
+    },
+    {
+      "updatedAt": "2026-03-17T00:13:08.288Z",
+      "createdAt": "2026-03-17T00:13:08.288Z",
+      "id": "E8aWxSQcagY7nMCt",
+      "name": "RevOps"
+    },
+    {
+      "updatedAt": "2026-03-17T00:13:08.461Z",
+      "createdAt": "2026-03-17T00:13:08.461Z",
+      "id": "FD7mF0gyhH6j2kOH",
+      "name": "Revenue Intelligence"
+    },
+    {
+      "updatedAt": "2026-03-17T00:13:08.569Z",
+      "createdAt": "2026-03-17T00:13:08.569Z",
+      "id": "KfBQHW4ReBN4SAKk",
+      "name": "HubSpot"
+    },
+    {
+      "updatedAt": "2026-03-17T00:13:08.254Z",
+      "createdAt": "2026-03-17T00:13:08.254Z",
+      "id": "ozudpDuWhx7rPCeF",
+      "name": "ICP"
+    }
+  ]
+}
