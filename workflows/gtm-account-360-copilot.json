@@ -1,0 +1,551 @@
+{
+  "name": "Account 360 GTM Copilot",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "mode": "webhook",
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        -96
+      ],
+      "id": "d7bc0b80-6854-4ea3-90ee-8451bc911663",
+      "name": "When chat message received",
+      "webhookId": "d73249fa-69b5-4a2d-ad58-2fdfbbcb0910"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        336
+      ],
+      "id": "1657aed7-f06f-482b-b57b-cc17a5b48353",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "ylonGyuOTU6LEy2j",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "=You are an Account 360 GTM Copilot for B2B SaaS sales and customer success teams.\n\nYou will receive a JSON object as input that may include: domain, companyId, account_name, lifecyclestage, and hubspot.\n\nYou have access to tools, including hubspot_get_company_by_domain, which retrieves company data from HubSpot using a website domain.\n\nMandatory rules\n\nIf the input JSON already contains companyId or hubspot.properties, treat that as authoritative HubSpot data and DO NOT claim fields are missing if they are present.\n\nIf account_name is present and not \"Unknown\", you MUST use it as the account name.\n\nIf lifecyclestage is present and not \"Unknown\", you MUST use it to infer stage.\n\nOnly call hubspot_get_company_by_domain if you need additional company fields AND they are not already present in the input JSON.\n\nOutput requirements (strict)\n\nRespond with valid JSON only.\n\nNo markdown, no explanations, no extra text.\n\nThe JSON MUST follow this exact structure:\n\n{\n\"account_name\": \"Acme Inc.\",\n\"domain\": \"acme.com\",\n\"summary\": \"1–3 short paragraphs describing the account context and assumptions, grounded in HubSpot data when available.\",\n\"stage\": \"Prospect | Opportunity | Customer | Churn Risk | Expansion | Unknown\",\n\"health_score\": \"Good | Medium | Poor | Unknown\",\n\"risks\": [\n\"Short sentence describing a specific risk\"\n],\n\"opportunities\": [\n\"Short sentence describing a specific opportunity\"\n],\n\"next_actions\": [\n{\n\"channel\": \"email | call | Slack | LinkedIn\",\n\"reason\": \"Why this action makes sense\",\n\"copy\": \"Ready-to-send message in 2–6 sentences.\"\n}\n]\n}\n\nAdditional constraints\n\nMap HubSpot lifecycle stage to stage when possible. Use this mapping:\n\nsubscriber, lead → Prospect\n\nmarketingqualifiedlead, salesqualifiedlead → Opportunity\n\nopportunity → Opportunity\n\ncustomer → Customer\n\nevangelist → Expansion\n\nother/unknown → Unknown\n\nAlways include 3–5 items in next_actions.\n\nNever invent CRM data. Use \"Unknown\" when missing."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1136,
+        144
+      ],
+      "id": "520c4617-0f57-4cd1-ae1b-b8f3bb144816",
+      "name": "Account 360 Agent"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "company",
+        "operation": "searchByDomain",
+        "domain": "={{ $json.domain }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.hubspotTool",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        336
+      ],
+      "id": "1834a28c-aefc-45f0-a049-0c2f9801553b",
+      "name": "Get Hubspot Account by Domain",
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "JeOX6jr31U3kqrBr",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input =\n  $json.chatInput ??\n  $json.body?.chatInput ??\n  $json.text ??\n  '';\n\nconst text = String(input).trim();\n\n// Find a domain anywhere in the message (e.g., \"acme.com\")\nconst domainMatch = text.match(/([a-z0-9-]+\\.)+[a-z]{2,}/i);\nconst domain = domainMatch ? domainMatch[0].toLowerCase() : null;\n\n// If user included a domain, remove it from the remaining text; the rest is the query/name\nconst companyQuery = domain ? text.replace(domainMatch[0], '').trim() : text;\n\nreturn [{\n  json: {\n    input: text,\n    domain,\n    companyQuery: companyQuery || text\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        -96
+      ],
+      "id": "f44fbc5b-6828-473d-b7f1-20e8c902a859",
+      "name": "Parse User Input"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "company",
+        "operation": "getAll",
+        "limit": 250,
+        "options": {
+          "propertiesCollection": {
+            "propertiesValues": {
+              "properties": [
+                "name",
+                "website"
+              ],
+              "propertyMode": "valueOnly"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        -96
+      ],
+      "id": "1d360269-46c4-492c-8427-96a86228f865",
+      "name": "Get many companies",
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "JeOX6jr31U3kqrBr",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (!items.length) return [{ json: { error: \"No items received\" } }];\n\n// Parse fields should be present either in each merged item, or only on the first.\nconst first = items[0].json;\n\nconst input = String(first.input || '').trim();\nconst queryRaw = String(first.companyQuery || '').trim();\nconst query = queryRaw.toLowerCase();\nconst userDomain = first.domain ? String(first.domain).trim().toLowerCase() : null;\n\nconst norm = (s) => String(s || '').trim().toLowerCase();\nconst toDomain = (value) =>\n  String(value || '')\n    .trim()\n    .toLowerCase()\n    .replace(/^https?:\\/\\//, '')\n    .replace(/^www\\./, '')\n    .split('/')[0] || null;\n\nconst scoreCompany = (name, domain, website) => {\n  const n = norm(name);\n  const d = norm(domain);\n  const w = norm(website);\n\n  if (!query) return 0;\n  if (n === query) return 100;\n  if (n.includes(query)) return 70;\n  if (query.includes(n) && n.length >= 3) return 50;\n  if (d.includes(query) || w.includes(query)) return 40;\n  return 0;\n};\n\nlet best = null;\nlet bestScore = 0;\n\nfor (const it of items) {\n  const c = it.json;\n\n  // Company data might be in properties, or might have been merged differently\n  const props = c.properties ?? c;\n\n  // If this item doesn't look like a company, skip it\n  const hasCompanySignal = props.name || props.domain || props.website || c.id || props.hs_object_id;\n  if (!hasCompanySignal) continue;\n\n  const s = scoreCompany(props.name, props.domain, props.website);\n  if (s > bestScore) {\n    bestScore = s;\n    best = c;\n  }\n}\n\nconst bestProps = best?.properties ?? {};\nconst pickedDomain = toDomain(bestProps.domain) || toDomain(bestProps.website);\n\nreturn [{\n  json: {\n    input,\n    companyQuery: queryRaw,\n    domain: userDomain || pickedDomain,\n    companyName: bestProps.name || null,\n    companyId: best?.id || bestProps.hs_object_id || null,\n    matchScore: best ? bestScore : 0,\n    matchSource: userDomain ? \"user_domain\" : (best ? \"hubspot_batch_match\" : \"none\")\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        144
+      ],
+      "id": "ad1fba37-b4c9-4134-aaff-2810e6911b9b",
+      "name": "Select Company from Batch"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        288,
+        144
+      ],
+      "id": "27eeb817-f5c5-4521-82d0-66bddeed4a82",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "engagement",
+        "type": "task",
+        "dueDate": "2025-12-26T00:00:00",
+        "metadata": {
+          "body": "={{ \n\"Account 360 Summary\\n\\n\" +\nJSON.parse($json.output).summary +\n\"\\n\\nRisks:\\n- \" + JSON.parse($json.output).risks.join(\"\\n- \") +\n\"\\n\\nOpportunities:\\n- \" + JSON.parse($json.output).opportunities.join(\"\\n- \")\n}}",
+          "subject": "=Account 360 Review: {{ JSON.parse($json.output).account_name }}"
+        },
+        "additionalFields": {
+          "associations": {
+            "companyIds": "={{ $node[\"Prepare Agent Input\"].json.companyId }}"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        128
+      ],
+      "id": "30c3ba1c-e4c1-4fe3-8b73-80ff84cb5eaf",
+      "name": "Create Account 360 Task",
+      "executeOnce": false,
+      "retryOnFail": false,
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "JeOX6jr31U3kqrBr",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "company",
+        "operation": "searchByDomain",
+        "domain": "={{ $json.domain }}",
+        "options": {
+          "properties": [
+            "name",
+            "domain",
+            "website",
+            "lifecyclestage",
+            "hubspot_owner_id"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        144
+      ],
+      "id": "a3d39cb5-b9ac-4e16-9fa8-c77801cb5647",
+      "name": "Search for a company by Domain",
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "JeOX6jr31U3kqrBr",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const hs = $input.first().json;\n\n// Flatten HubSpot properties\nconst propsRaw = hs.properties || {};\nconst flatProps = {};\nfor (const [k, v] of Object.entries(propsRaw)) {\n  flatProps[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;\n}\n\nreturn [{\n  json: {\n    // what the agent should use directly\n    domain: flatProps.domain || flatProps.website || \"\",\n    companyId: hs.companyId || null,\n    account_name: flatProps.name || \"Unknown\",\n    lifecyclestage: flatProps.lifecyclestage || \"Unknown\",\n\n    // keep the full payload for reference (optional)\n    hubspot: {\n      companyId: hs.companyId || null,\n      portalId: hs.portalId || null,\n      properties: flatProps\n    }\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        144
+      ],
+      "id": "fcdf7a45-14fe-419f-80d1-b9b22a59ce49",
+      "name": "Prepare Agent Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fa2ad295-bcb6-435a-a8ae-05efbf3f11bf",
+              "leftValue": "={{ $node[\"Prepare Agent Input\"].json.companyId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1488,
+        144
+      ],
+      "id": "e3986082-81ac-4ad6-9497-c38d904f9e27",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "value": "U09GVRTKC95",
+          "mode": "list",
+          "cachedResultName": "vinay.gangidi"
+        },
+        "text": "={{ \n(() => {\n  const a = $json.output ? JSON.parse($json.output) : null;\n  const taskId = $json.engagement?.id ?? null;\n\n  if (!a) return \"Account 360 ran, but AI output was missing from this Slack step.\";\n\n  return (\n    \"*Account 360 created in HubSpot*\\n\" +\n    \"*Account:* \" + (a.account_name || \"Unknown\") + \"\\n\" +\n    \"*Domain:* \" + (a.domain || \"Unknown\") + \"\\n\" +\n    \"*Stage:* \" + (a.stage || \"Unknown\") + \"\\n\" +\n    \"*Health:* \" + (a.health_score || \"Unknown\") + \"\\n\" +\n    (taskId ? (\"*Task ID:* \" + taskId + \"\\n\") : \"\") +\n    \"\\n*Summary:*\\n\" + (a.summary || \"\") + \"\\n\\n\" +\n    \"*Top next actions:*\\n- \" +\n    (a.next_actions || [])\n      .slice(0,2)\n      .map(x => `${x.channel}: ${x.reason}`)\n      .join(\"\\n- \")\n  );\n})()\n}}\n",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1808,
+        368
+      ],
+      "id": "228ed4cb-bdff-490e-baea-e1c065678f9c",
+      "name": "Send a message",
+      "webhookId": "877a8c20-72b7-4dcd-90d2-16de673a23fc",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "66DExx3WGB664etE",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1600,
+        368
+      ],
+      "id": "dc312acc-a975-45a5-8d4c-af7834855499",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "content": "**Problem Statement**: \nGTM teams rarely have a complete, up-to-date view of an account at the moment they need to act.\n\nAccount context is fragmented across chat inputs, CRM records, and tribal knowledge. Reps often start outreach without clarity on lifecycle stage, data quality, ownership, or next best actions. As a result, teams waste time manually researching accounts, duplicate outreach, or let leads go stale because there is no consistent workflow that turns raw input into CRM-anchored action.\n\nThe problem is not lack of data but lack of reliable orchestration between user input, CRM truth, AI reasoning, and execution.",
+        "height": 224,
+        "width": 704,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -368
+      ],
+      "id": "9652b3b0-0b30-4f3c-b968-71485c16102e",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "**Solution**:\n\n**Account 360 GTM Copilot automates the full “input → context → action” loop in a single workflow.**\n\nT**he automation:**\n\nAccepts flexible input (company name or domain) from chat\nResolves the correct account using HubSpot as the source of truth\nSafely enriches the account with lifecycle and identity data\nGenerates a structured AI-powered Account 360 brief grounded in CRM data\nConverts insight into action by creating a HubSpot task\nNotifies the GTM team in Slack with a concise, actionable summary\n\n**Key design principles:**\n\nCRM-first: HubSpot data is treated as authoritative; missing fields are never hallucinated\nStateless: Each run is independent and reproducible (no chat memory required)\nAction-oriented: Every execution produces a durable outcome in HubSpot and Slack\nSafe by default: Guardrails prevent task creation when account resolution fails\nThis turns ad-hoc account research into a repeatable, production-ready GTM workflow.",
+        "height": 416,
+        "width": 1232,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -368
+      ],
+      "id": "3b999bb3-5930-484c-892b-1c1ce79b1879",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "**Future Enhancements**\nThis workflow is intentionally modular and easy to extend. High-value next enhancements include:\n\n**1. Product Usage & Health Signals**\n\nIntegrate product analytics (Segment, Amplitude, Mixpanel, Pendo, etc.) to:\nImprove health scoring\nDetect churn risk or expansion signals\nTrigger proactive outreach based on usage changes\n\n**2. Deal & Pipeline Awareness**\n\nPull associated deals from HubSpot or Salesforce to:\nAdjust recommendations based on deal stage\nSurface stalled opportunities\nTailor next actions for closing vs expansion\n\n**3. Automated Follow-Up Execution**\n\nConvert AI-recommended next actions into:\nMultiple HubSpot tasks (one per action)\nAutomated email drafts\nSequenced outreach plays\n\n**4. Scheduled & Event-Driven Triggers**\n\nRun the workflow automatically:\nBefore upcoming meetings\nOn lifecycle stage changes\nWhen new accounts are created or enriched\n\n**5. Multi-CRM Support**\n\nExtend account resolution beyond HubSpot to support:\nSalesforce\nPipedrive\nCRM-less enrichment paths",
+        "height": 752,
+        "width": 672,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        -368
+      ],
+      "id": "c39e729d-c332-4b25-aed3-5bdbf0442c47",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "**When chat message received**: Entry point for the workflow. Accepts a company name or domain via chat/webhook.\n**Parse User Input**: Extracts a domain if present and separates remaining text as a company name query.\n**Get many companies**: Fetches a batch of HubSpot companies to enable name-based matching when no domain is provided.\n**Merge**: Combines user input with the HubSpot company batch for downstream matching logic.\n**Select Company from Batch**: Scores and selects the best-matching company and resolves a usable domain.\n**Search for a company by Domain**: Looks up the resolved domain in HubSpot to fetch authoritative company data.\n**Prepare Agent Input**: Normalizes HubSpot fields and prepares a clean JSON payload for the AI Agent.\n**Account 360 Agent**: Generates an AI-powered Account 360 summary grounded in HubSpot data, including risks, opportunities, and next actions.\n**If**: Ensures downstream actions only run when a valid HubSpot companyId exists.\n**Create Account 360 Task**: Creates a follow-up task in HubSpot with the Account 360 summary and recommendations.\n**Merge1**: Combines AI output and HubSpot task metadata for notification purposes.\n**Send a message (Slack)**: Posts a concise Account 360 summary and next actions to Slack for team visibility.\n",
+        "height": 320,
+        "width": 1040,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        512,
+        512
+      ],
+      "id": "1b5e9f14-fff7-4354-bc9b-3912e09b17c1",
+      "name": "Sticky Note3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Parse User Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Account 360 Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Account 360 Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Hubspot Account by Domain": {
+      "ai_tool": [
+        [
+          {
+            "node": "Account 360 Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse User Input": {
+      "main": [
+        [
+          {
+            "node": "Get many companies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many companies": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Select Company from Batch": {
+      "main": [
+        [
+          {
+            "node": "Search for a company by Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Select Company from Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search for a company by Domain": {
+      "main": [
+        [
+          {
+            "node": "Prepare Agent Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Agent Input": {
+      "main": [
+        [
+          {
+            "node": "Account 360 Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create Account 360 Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Account 360 Task": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2cfaaff8-2520-44b0-aa34-602609101000",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "db1715da5f21adba44ce4ea3b08abb06cd1771e876f5ad2751fcafd78c5eb9dc"
+  },
+  "id": "s9fYeN10sQYmRHwe",
+  "tags": []
+}
