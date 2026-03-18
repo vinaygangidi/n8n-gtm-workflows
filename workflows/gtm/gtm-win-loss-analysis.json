@@ -67,7 +67,7 @@
         560,
         432
       ],
-      "webhookId": "53c96048-693c-4a0e-9819-d84c8e4836b2"
+      "webhookId": "<Webhook ID>"
     },
     {
       "parameters": {
@@ -163,11 +163,11 @@
         1856,
         224
       ],
-      "webhookId": "be813031-d341-4389-b5f4-f3c14a520f0b"
+      "webhookId": "YOUR_WEBHOOK_ID"
     },
     {
       "parameters": {
-        "sendTo": "revops@company.com",
+        "sendTo": "team@yourcompany.com",
         "subject": "={{ $json.emailSubject }}",
         "message": "={{ $json.text }}",
         "options": {}
@@ -180,7 +180,7 @@
         1856,
         432
       ],
-      "webhookId": "56d44fce-22b7-47dc-b5b4-3a6161c390fe"
+      "webhookId": "<Webhook ID>"
     },
     {
       "parameters": {
@@ -296,7 +296,7 @@
   },
   "versionId": "0c60c211-d0c0-46f3-ab23-e6a655b1a2c9",
   "meta": {
-    "instanceId": "db1715da5f21adba44ce4ea3b08abb06cd1771e876f5ad2751fcafd78c5eb9dc"
+    "instanceId": "<Instance ID>"
   },
   "id": "RxvqGGR2kT80xLkP",
   "tags": []

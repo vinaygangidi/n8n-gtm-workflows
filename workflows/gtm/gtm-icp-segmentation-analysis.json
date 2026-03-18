@@ -51,7 +51,7 @@
         288,
         224
       ],
-      "webhookId": "6fa1399a-2fe8-4aac-8780-4dceb741002f"
+      "webhookId": "YOUR_WEBHOOK_ID"
     },
     {
       "parameters": {
@@ -72,7 +72,7 @@
       "alwaysOutputData": true,
       "credentials": {
         "hubspotOAuth2Api": {
-          "id": "JeOX6jr31U3kqrBr",
+          "id": "YOUR_HUBSPOTOAUTH2API_CREDENTIAL_ID",
           "name": "HubSpot account"
         }
       }
@@ -130,7 +130,7 @@
       ],
       "credentials": {
         "anthropicApi": {
-          "id": "1MTzU3SlnKKCQsfr",
+          "id": "YOUR_ANTHROPICAPI_CREDENTIAL_ID",
           "name": "Anthropic account"
         }
       }
@@ -154,9 +154,9 @@
         "select": "user",
         "user": {
           "__rl": true,
-          "value": "U09GVRTKC95",
+          "value": "YOUR_SLACK_USER_ID",
           "mode": "list",
-          "cachedResultName": "vinay.gangidi"
+          "cachedResultName": "your.username"
         },
         "text": "={{ $json.slackMessage }}",
         "otherOptions": {}
@@ -169,17 +169,17 @@
         1584,
         32
       ],
-      "webhookId": "a6589128-4c86-4f75-9bb2-40b9a5d06077",
+      "webhookId": "YOUR_WEBHOOK_ID",
       "credentials": {
         "slackOAuth2Api": {
-          "id": "66DExx3WGB664etE",
+          "id": "YOUR_SLACKOAUTH2API_CREDENTIAL_ID",
           "name": "Slack account"
         }
       }
     },
     {
       "parameters": {
-        "sendTo": "=  vinay.gangidi@gmail.com",
+        "sendTo": "=  your-email@example.com",
         "subject": "={{ $json.emailSubject }}",
         "message": "={{ $json.emailHtml }}",
         "options": {}
@@ -192,11 +192,11 @@
         1584,
         224
       ],
-      "webhookId": "3c056ea6-2446-490b-8e88-740d09db4603",
+      "webhookId": "YOUR_WEBHOOK_ID",
       "credentials": {
         "gmailOAuth2": {
-          "id": "k54ukSjNOVk28L2b",
-          "name": "Vgangidi"
+          "id": "YOUR_GMAILOAUTH2_CREDENTIAL_ID",
+          "name": "Your Account"
         }
       }
     },
@@ -320,7 +320,7 @@
   "versionId": "cbb6bdfe-f3a1-46d1-93f0-aca398505a32",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "db1715da5f21adba44ce4ea3b08abb06cd1771e876f5ad2751fcafd78c5eb9dc"
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
   },
   "id": "oo1nyhBx9LgznlWB",
   "tags": [

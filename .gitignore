@@ -1,0 +1,17 @@
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+
+# Sensitive files
+.env
+.env.local
+*.backup
+*_original.json
+
+# Credentials
+credentials/
+secrets/
+
+# Logs
+*.log
