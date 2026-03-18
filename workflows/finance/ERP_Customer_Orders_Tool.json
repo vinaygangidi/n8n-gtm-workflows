@@ -1,0 +1,182 @@
+{
+  "name": "ERP Customer Orders Tool",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -16
+      ],
+      "id": "f4501056-f6a6-4a1d-acf5-15ce8fd98371",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_DATA_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Order Data",
+          "cachedResultUrl": "/projects/XbzHDpjiSp3yylLu/datatables/tfvXxmwOPGXzKkY8"
+        },
+        "matchType": "allConditions",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        48,
+        -16
+      ],
+      "id": "e6f7e6cf-a011-471a-b2cd-85185644813d",
+      "name": "OrderQuoteData"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.orders }}",
+        "options": {
+          "systemMessage": "You are an ERP Customer 360 Copilot.\nYou receive a field called orders, which is an array of order objects with:\n\norder_reference\n\ncustomer\n\norder_date\n\nexpiration\n\npayment_terms\n\nproducts (array)\n\nquantity\n\nunit_price\n\nsales_team\n\ncustomer_reference\n\ntags\n\nThe user will ask questions like:\n\n“Give me a 360 view for Azure Interior.”\n\n“What is the situation for Deco Addict and what actions should Finance and Sales take?”\n\nYour job:\n\nIdentify the customer name mentioned in the user’s question.\n\nFilter orders to only those where customer contains that name (case-insensitive).\n\nBuild a summary that includes:\n\nnumber of orders,\n\napproximate total value (quantity * unit_price),\n\nany patterns (recent orders, long expirations, tags like Product/Services).\n\nAssess risk (Low / Medium / High) if relevant, based on volume and dates.\n\nPropose 3–5 next actions for Sales / Finance / CS (email, call, meeting), and include suggested copy.\n\nAnswer in Markdown with headings:\n\n## Customer Summary\n\n## Risk & Opportunities\n\n## Recommended Next Actions\n\nYou don’t need a separate Code node after the Agent now, because the Agent can output nice Markdown itself."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        400,
+        -16
+      ],
+      "id": "2c1e7d0f-8792-443a-93c6-cada2d99063f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        400,
+        160
+      ],
+      "id": "b92fece8-8d49-4a5e-a33c-0b5eef29efbd",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAIAPI_CREDENTIAL_ID",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Take all rows from the Data Table and pack them into one object\nconst items = $input.all();\n\n// Map to a cleaner structure (only fields we care about)\nconst orders = items.map(item => {\n  const r = item.json;\n  return {\n    order_reference: r.Order_Reference,\n    customer: r.Customer,\n    order_date: r.Order_Date,\n    expiration: r.Expiration,\n    payment_terms: r.Payment_Terms,\n    products: (r.OrderLinesProducts || \"\")\n      .toString()\n      .split(\",\")\n      .map(p => p.trim())\n      .filter(Boolean),\n    quantity: Number((r.OrderLinesQuantity || \"0\").toString().replace(\",\", \"\")),\n    unit_price: Number((r.OrderLinesUnitPrice || \"0\").toString().replace(\",\", \"\")),\n    sales_team: r.Sales_Team,\n    customer_reference: r.Customer_Reference,\n    tags: (r.Tags || \"\")\n      .toString()\n      .split(\",\")\n      .map(t => t.trim())\n      .filter(Boolean),\n  };\n});\n\n// Return ONE item with all orders inside\nreturn [\n  {\n    json: {\n      orders,\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        -16
+      ],
+      "id": "d29eb1a9-12d4-4560-86d1-7b6967a1fe98",
+      "name": "Build ERP Context"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_DATA_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Order Data",
+          "cachedResultUrl": "/projects/XbzHDpjiSp3yylLu/datatables/tfvXxmwOPGXzKkY8"
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1,
+      "position": [
+        656,
+        160
+      ],
+      "id": "4efef05a-20a6-4c24-9a67-a40aa311d09a",
+      "name": "Get row(s) in Data table"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "OrderQuoteData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OrderQuoteData": {
+      "main": [
+        [
+          {
+            "node": "Build ERP Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build ERP Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in Data table": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b9eea2aa-2833-4ea4-aac1-ba5ec43d1f94",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "vdmDZFA5BBoyejiI",
+  "tags": []
+}

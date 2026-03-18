@@ -1,0 +1,300 @@
+{
+  "name": "Tax Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3efc091a-f3e1-42d0-909b-be25f2990105",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "operation": "search",
+        "query": "BankStatements"
+      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "7fbf6307-823b-488f-a730-86631fbbabb7",
+      "name": "Search a folder1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "YOUR_MICROSOFTONEDRIVEOAUTH2API_CREDENTIAL_ID",
+          "name": "Microsoft Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "folderId": "={{ $json.id }}"
+      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        384,
+        0
+      ],
+      "id": "8788c685-7db6-4147-9bc6-02a5dce6f15a",
+      "name": "Get items in a folder",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "YOUR_MICROSOFTONEDRIVEOAUTH2API_CREDENTIAL_ID",
+          "name": "Microsoft Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        592,
+        0
+      ],
+      "id": "a462e264-aee3-49ba-a356-d81e61e22a82",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $('Get items in a folder').item.json.id }}"
+      },
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1,
+      "position": [
+        864,
+        208
+      ],
+      "id": "51569818-8db1-40fd-bbeb-27d230a5deee",
+      "name": "Download a file",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftOneDriveOAuth2Api": {
+          "id": "YOUR_MICROSOFTONEDRIVEOAUTH2API_CREDENTIAL_ID",
+          "name": "Microsoft Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        208
+      ],
+      "id": "103889fd-87f2-4f59-b0b8-ec790d910d5e",
+      "name": "Extract text",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "YOUR_MISTRALCLOUDAPI_CREDENTIAL_ID",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// INPUT: an array of OCR results, one per file, like your sample\n// OUTPUT: one combined object per statement with full text ready for classification\n\nconst output = [];\n\nfor (const item of items) {\n  const pages = item.json.pages || [];\n  const combinedText = pages.map(p => p.markdown || p.text || \"\").join(\"\\n\\n\");\n  \n  output.push({\n    json: {\n      statement_id: item.json.fileName || `statement_${Math.random().toString(36).slice(2)}`,\n      page_count: pages.length,\n      fullText: combinedText,\n      account_type: item.json.accountType || \"checking\", // you can set dynamically later\n      currency: \"CAD\"\n    }\n  });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        208
+      ],
+      "id": "1579e599-f78b-4f7f-a6ea-487c6178f6ac",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.mergedStatements) }}\n",
+        "options": {
+          "systemMessage": "=You are a tax analysis assistant.\n\nYou will receive multiple business bank and credit card statements as raw text (OCR results). \nYour job is to extract and classify all monetary transactions into the following tax summary categories:\n\nSales Income\nInterest/investment income\nDividend income received\nAdvertising/Promotion\nBusiness Insurance\nTax/Licenses/Memberships\nCredit Card Service Charges\nDonations***\nAdministrative Expenses\nInterest/Bank Charges\nMeals/Entertainment\nProfessional Fees\nPurchase of Materials\nSalaries/Wages***\nShipping/Couriers\nSubcontractors***\nSupplies\nTelecommunication (Internet and Mobile)\nTraining\nTravel\nOther***\n\n### Output schema\n\nReturn ONLY a single valid JSON object:\n\n{\n  \"summaries\": [\n    {\n      \"statement_id\": string,\n      \"period_start\": \"YYYY-MM-DD\" | null,\n      \"period_end\": \"YYYY-MM-DD\" | null,\n      \"currency\": string,\n      \"totals\": {\n        \"Sales Income\": number,\n        \"Interest/investment income\": number,\n        \"Dividend income received\": number,\n        \"Advertising/Promotion\": number,\n        \"Business Insurance\": number,\n        \"Tax/Licenses/Memberships\": number,\n        \"Credit Card Service Charges\": number,\n        \"Donations***\": number,\n        \"Administrative Expenses\": number,\n        \"Interest/Bank Charges\": number,\n        \"Meals/Entertainment\": number,\n        \"Professional Fees\": number,\n        \"Purchase of Materials\": number,\n        \"Salaries/Wages***\": number,\n        \"Shipping/Couriers\": number,\n        \"Subcontractors***\": number,\n        \"Supplies\": number,\n        \"Telecommunication (Internet and Mobile)\": number,\n        \"Training\": number,\n        \"Travel\": number,\n        \"Other***\": number\n      }\n    }\n  ],\n  \"grand_totals\": { ...same keys as above... }\n}\n\nRules:\n- Outgoing amounts (expenses) are negative.\n- Incoming amounts (income or refunds) are positive.\n- If you cannot classify an item, use \"Other***\".\n- Only return JSON, no markdown, text, or commentary.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        -96
+      ],
+      "id": "8037ee93-e490-4b57-8ae8-975905c9996a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1008,
+        32
+      ],
+      "id": "e9587198-6d6f-4487-ab40-a0ea372de231",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAIAPI_CREDENTIAL_ID",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// INPUT: 19 items, each like { statement_id, fullText, account_type, currency }\n// OUTPUT: 1 item with mergedStatements array\n\nreturn [{\n  json: {\n    mergedStatements: items.map(i => ({\n      statement_id: i.json.statement_id,\n      account_type: i.json.account_type,\n      currency: i.json.currency,\n      text: i.json.fullText\n    }))\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -96
+      ],
+      "id": "baa0e245-6970-424a-bbb4-92c2fde50095",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Search a folder1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search a folder1": {
+      "main": [
+        [
+          {
+            "node": "Get items in a folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get items in a folder": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download a file": {
+      "main": [
+        [
+          {
+            "node": "Extract text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "52eaf739-d91b-4464-a70b-85556ef13064",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "RbosbGUOn2CNOil8",
+  "tags": []
+}
